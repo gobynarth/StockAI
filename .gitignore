@@ -1,0 +1,32 @@
+# Large data/checkpoint files — fetch locally or from yfinance
+data/*.csv
+checkpoints/
+sweep_checkpoints/
+ext_checkpoints/
+sample_checkpoints/
+finetuned/
+
+# Signal output logs
+live_signals_*.csv
+signal_log.txt
+exit_optimizer_*.csv
+rolling_accuracy.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Claude Code local settings
+.claude/
+
+# Heatmap/chart PNGs (generated outputs)
+*.png
+
+# Windows
+Thumbs.db
+desktop.ini
