@@ -8,7 +8,9 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER = sys.argv[1].upper() if len(sys.argv) > 1 else "RIVN"
@@ -18,7 +20,7 @@ HORIZONS     = [30, 40, 60, 90]
 TEMPERATURE  = 1.0
 LOOKBACK     = 200
 
-CHECKPOINT_DIR = "C:/Users/Dream/StockAI/ext_checkpoints"
+CHECKPOINT_DIR = base_path("ext_checkpoints")
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 CRYPTO = {"BTC", "SOL", "TAO", "ETH", "DOGE", "XRP"}
@@ -30,7 +32,7 @@ def next_dates(from_date, n):
         return pd.date_range(start=from_date + timedelta(days=1), periods=n)
     return pd.bdate_range(start=from_date + timedelta(days=1), periods=n)
 
-csv_path = f"C:/Users/Dream/StockAI/data/{TICKER}.csv"
+csv_path = base_path("data", f"{TICKER}.csv")
 if os.path.exists(csv_path):
     raw = pd.read_csv(csv_path, parse_dates=["timestamps"])
     raw["timestamps"] = pd.to_datetime(raw["timestamps"]).dt.tz_localize(None)

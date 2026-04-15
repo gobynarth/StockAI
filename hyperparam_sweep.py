@@ -8,7 +8,9 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER = sys.argv[1].upper() if len(sys.argv) > 1 else "TSLA"
@@ -21,7 +23,7 @@ LOOKBACKS    = [200, 400]
 TOP_PS       = [0.8, 0.9, 0.95]   # nucleus sampling cutoff
 TOP_KS       = [0, 10, 50]        # top-k filtering (0=disabled)
 
-CHECKPOINT_DIR = "C:/Users/Dream/StockAI/sweep_checkpoints"
+CHECKPOINT_DIR = base_path("sweep_checkpoints")
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 CRYPTO = {"BTC", "SOL", "TAO", "ETH", "DOGE", "XRP"}
@@ -33,7 +35,7 @@ def next_dates(from_date, n):
         return pd.date_range(start=from_date + timedelta(days=1), periods=n)
     return pd.bdate_range(start=from_date + timedelta(days=1), periods=n)
 
-csv_path = f"C:/Users/Dream/StockAI/data/{TICKER}.csv"
+csv_path = base_path("data", f"{TICKER}.csv")
 if os.path.exists(csv_path):
     print(f"Loading {TICKER} from local CSV...")
     raw = pd.read_csv(csv_path, parse_dates=["timestamps"])

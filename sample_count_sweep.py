@@ -9,7 +9,9 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER      = sys.argv[1].upper() if len(sys.argv) > 1 else "RIVN"
@@ -20,7 +22,7 @@ SELECTION_N = 600
 VALIDATION_N= 400
 SAMPLE_COUNTS = [5, 10]   # 20 too slow; 1 already done in hyperparam sweep
 
-CHECKPOINT_DIR = "C:/Users/Dream/StockAI/sample_checkpoints"
+CHECKPOINT_DIR = base_path("sample_checkpoints")
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 CRYPTO = {"BTC", "SOL", "TAO", "ETH", "DOGE", "XRP", "COIN"}
@@ -32,7 +34,7 @@ def next_dates(from_date, n):
         return pd.date_range(start=from_date + timedelta(days=1), periods=n)
     return pd.bdate_range(start=from_date + timedelta(days=1), periods=n)
 
-csv_path = f"C:/Users/Dream/StockAI/data/{TICKER}.csv"
+csv_path = base_path("data", f"{TICKER}.csv")
 if os.path.exists(csv_path):
     raw = pd.read_csv(csv_path, parse_dates=["timestamps"])
     raw["timestamps"] = pd.to_datetime(raw["timestamps"]).dt.tz_localize(None)
@@ -59,7 +61,7 @@ model_obj  = Kronos.from_pretrained("NeoQuasar/Kronos-base")
 predictor  = KronosPredictor(model_obj, tokenizer, max_context=512)
 
 # Load baseline (sample_count=1) from sweep checkpoints if available
-sweep_ckpt = f"C:/Users/Dream/StockAI/sweep_checkpoints/{TICKER}_h{HORIZON}_t10_lb{LOOKBACK}.csv"
+sweep_ckpt = base_path("sweep_checkpoints", f"{TICKER}_h{HORIZON}_t10_lb{LOOKBACK}.csv")
 if os.path.exists(sweep_ckpt):
     base_df = pd.read_csv(sweep_ckpt, parse_dates=["date"])
     base_oos = base_df.iloc[-VALIDATION_N:]["correct"].mean() * 100

@@ -6,14 +6,16 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER    = sys.argv[1] if len(sys.argv) > 1 else "TSLA"
 N_WINDOWS = 1000
 LOOKBACK  = 400
 HORIZONS  = [1, 5, 10]
-CHECKPOINT_DIR = "C:/Users/Dream/StockAI/checkpoints"
+CHECKPOINT_DIR = base_path("checkpoints")
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 MODELS = [
@@ -31,7 +33,7 @@ def next_dates(from_date, n):
         return pd.date_range(start=from_date + timedelta(days=1), periods=n)
     return pd.bdate_range(start=from_date + timedelta(days=1), periods=n)
 
-csv_path = f"C:/Users/Dream/StockAI/data/{TICKER}.csv"
+csv_path = base_path("data", f"{TICKER}.csv")
 if os.path.exists(csv_path):
     print(f"Loading {TICKER} from local CSV ({csv_path})...")
     raw = pd.read_csv(csv_path, parse_dates=["timestamps"])
@@ -251,6 +253,6 @@ for ax, label, n, offset in [
                     color="black" if 40 < val < 70 else "white", fontsize=11, fontweight="bold")
     plt.colorbar(im, ax=ax, fraction=0.04)
 
-out = f"C:/Users/Dream/StockAI/full_backtest_{TICKER}.png"
+out = base_path(f"full_backtest_{TICKER}.png")
 plt.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
 print(f"Saved: {out}")

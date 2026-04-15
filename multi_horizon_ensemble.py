@@ -5,8 +5,9 @@ Uses sweep_checkpoints (best T=1.0, lb=200 configs).
 """
 import os
 import pandas as pd
+from env_paths import base_path
 
-SWEEP_DIR    = "C:/Users/Dream/StockAI/sweep_checkpoints"
+SWEEP_DIR    = base_path("sweep_checkpoints")
 EDGE_TICKERS = ["ENVX", "RIVN", "TSLA", "COIN"]
 VALIDATION_N = 400
 SELECTION_N  = 600

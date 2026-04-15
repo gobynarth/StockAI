@@ -9,8 +9,9 @@ Usage: python ensemble_filter.py [TICKER]
 import sys, os
 import pandas as pd
 import numpy as np
+from env_paths import base_path
 
-CHECKPOINTS  = "C:/Users/Dream/StockAI/checkpoints"
+CHECKPOINTS  = base_path("checkpoints")
 MODELS       = ["mini", "small", "base"]
 HORIZONS     = [1, 5, 10]
 SELECTION_N  = 600
