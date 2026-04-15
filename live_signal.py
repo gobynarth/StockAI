@@ -89,6 +89,36 @@ def fmt_date(value):
     return str(value)
 
 
+def load_revalidation_watchlist(limit=10):
+    """Load the best rerun survivors for reference in the daily email."""
+    path = os.path.join(BASE, "screener_survivors.csv")
+    if not os.path.exists(path):
+        return []
+    try:
+        df = pd.read_csv(path)
+    except Exception:
+        return []
+    if df.empty:
+        return []
+    df = df[df["verdict"] == "KEEP"].copy()
+    if df.empty:
+        return []
+    # Filter out absurd Sharpe values from tiny/no-loss samples.
+    df["sharpe"] = pd.to_numeric(df["sharpe"], errors="coerce")
+    df = df[df["sharpe"].notna() & (df["sharpe"] < 100)]
+    df = df.sort_values(["sharpe", "val_acc", "long_wr"], ascending=[False, False, False])
+    rows = []
+    for _, row in df.head(limit).iterrows():
+        rows.append({
+            "ticker": row["ticker"],
+            "val_acc": float(row["val_acc"]),
+            "long_wr": float(row["long_wr"]),
+            "sharpe": float(row["sharpe"]),
+            "strategy": str(row["best_strategy"]),
+        })
+    return rows
+
+
 def download_daily_data(yf_ticker):
     raw = yf.download(yf_ticker, period="3y", interval="1d",
                       auto_adjust=True, progress=False, timeout=30)
@@ -283,6 +313,35 @@ def check_open_paper_trades(ohlc_cache):
     return closed
 
 
+def normalize_paper_trade_log():
+    """Remove exact duplicate rows and collapse duplicate OPEN trades per ticker."""
+    if not os.path.exists(PAPER_TRADE_LOG):
+        return pd.DataFrame()
+    df = pd.read_csv(PAPER_TRADE_LOG)
+    if df.empty:
+        return df
+
+    # Drop exact duplicate rows first.
+    df = df.drop_duplicates()
+
+    # Keep only the most recent OPEN trade per ticker/direction.
+    if "status" in df.columns:
+        open_df = df[df["status"] == "OPEN"].copy()
+        closed_df = df[df["status"] != "OPEN"].copy()
+        if not open_df.empty:
+            open_df["_entry_sort"] = pd.to_datetime(open_df["entry_date"], errors="coerce")
+            open_df = (
+                open_df.sort_values(["ticker", "_entry_sort"])
+                .groupby(["ticker", "direction"], as_index=False)
+                .tail(1)
+                .drop(columns="_entry_sort")
+            )
+        df = pd.concat([closed_df, open_df], ignore_index=True)
+
+    df.to_csv(PAPER_TRADE_LOG, index=False)
+    return df
+
+
 def open_paper_trade(ticker, direction, entry_price, entry_date, target_date, horizon, alloc):
     """Log a new paper trade with position sizing."""
     cfg = ACTIVE.get(ticker, {})
@@ -364,8 +423,8 @@ def load_open_trade_snapshots(open_trades, ohlc_cache):
     return snapshots
 
 
-def build_email_html(today, vix_level, vix_regime, action_rows, skipped_regime,
-                     closed_trade_rows, open_trade_rows, scorecard, ib_status_lines):
+def build_email_html(today, vix_level, vix_regime, new_entry_rows, closed_trade_rows,
+                     open_trade_rows, scorecard, ib_status_lines, watchlist_rows):
     css = """
     body { font-family: Arial, sans-serif; color: #1f2937; margin: 0; background: #f5f7fb; }
     .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
@@ -391,25 +450,25 @@ def build_email_html(today, vix_level, vix_regime, action_rows, skipped_regime,
         cls = "buy" if action == "BUY" else "sell" if action == "SELL/SHORT" else "skip"
         return f'<span class="pill {cls}">{html.escape(action)}</span>'
 
-    active_rows_html = ""
-    for row in action_rows:
+    new_rows_html = ""
+    for row in new_entry_rows:
         if row["latest_price"] == row["latest_price"]:
             px_class = "up" if row["price_move_pct"] >= 0 else "down"
             latest = f'<span class="{px_class}">{fmt_money(row["latest_price"])} ({fmt_pct(row["price_move_pct"])})</span>'
         else:
             latest = "-"
-        active_rows_html += f"""
+        new_rows_html += f"""
         <tr>
           <td><strong>{html.escape(row['ticker'])}</strong><br><span class="muted">{html.escape(row['tier'])} | {html.escape(row['consensus'])}</span></td>
-          <td>{action_badge(row['action'])}<div class="muted">{html.escape(row['instruction'])}</div></td>
-          <td>{fmt_money(row['entry_price'])}<br><span class="muted">{html.escape(row['origin'])}</span></td>
+          <td>{action_badge("NEW")}<div class="muted">{html.escape(row['instruction'])}</div></td>
+          <td>{fmt_money(row['signal_entry_price'])}<br><span class="muted">{html.escape(row['origin'])}</span></td>
           <td>{latest}</td>
           <td>{html.escape(row['exit_rule'])}</td>
           <td>{fmt_date(row['target_date'])}<br><span class="muted">{row['alloc_pct']*100:.1f}% alloc</span></td>
         </tr>
         """
-    if not active_rows_html:
-        active_rows_html = '<tr><td colspan="6" class="muted">No active signals today.</td></tr>'
+    if not new_rows_html:
+        new_rows_html = '<tr><td colspan="6" class="muted">No new entries today.</td></tr>'
 
     open_rows_html = ""
     for row in open_trade_rows:
@@ -441,7 +500,7 @@ def build_email_html(today, vix_level, vix_regime, action_rows, skipped_regime,
         closed_rows_html += f"""
         <tr>
           <td><strong>{html.escape(row['ticker'])}</strong><br><span class="muted">{html.escape(row['direction'])}</span></td>
-          <td>{html.escape(str(row['exit_reason']))}</td>
+          <td>{action_badge("EXIT")}<div class="muted">{html.escape(str(row['exit_reason']))}</div></td>
           <td>{fmt_money(row['exit_price'])}</td>
           <td><span class="{pnl_class}">{fmt_pct(row['pnl_pct'])}</span></td>
           <td>{fmt_date(row['exit_date'])}</td>
@@ -450,7 +509,6 @@ def build_email_html(today, vix_level, vix_regime, action_rows, skipped_regime,
     if not closed_rows_html:
         closed_rows_html = '<tr><td colspan="5" class="muted">No trades closed today.</td></tr>'
 
-    filters_html = "".join(f"<li>{html.escape(item)}</li>" for item in skipped_regime) if skipped_regime else "<li>No regime filters triggered today.</li>"
     ib_html = "".join(f"<li>{html.escape(item)}</li>" for item in ib_status_lines)
 
     scorecard_html = ""
@@ -461,30 +519,48 @@ def build_email_html(today, vix_level, vix_regime, action_rows, skipped_regime,
             f"<strong>Total P&amp;L:</strong> {fmt_pct(scorecard['total_pnl'])}</p>"
         )
 
+    watchlist_html = ""
+    for row in watchlist_rows:
+        watchlist_html += f"""
+        <tr>
+          <td><strong>{html.escape(row['ticker'])}</strong></td>
+          <td>{row['val_acc']:.1f}%</td>
+          <td>{row['long_wr']:.1f}%</td>
+          <td>{row['sharpe']:.2f}</td>
+          <td>{html.escape(row['strategy'])}</td>
+        </tr>
+        """
+    if not watchlist_html:
+        watchlist_html = '<tr><td colspan="5" class="muted">No rerun watchlist available yet.</td></tr>'
+
     return f"""<html><head><meta charset="utf-8"><style>{css}</style></head><body>
     <div class="wrap">
       <div class="hero">
         <h1>StockAI Daily Briefing</h1>
         <p>{html.escape(today)} | VIX {vix_level:.1f} ({html.escape(vix_regime)})</p>
-        <p>Only trade when all 3 Kronos models agree. Follow the exit rules exactly.</p>
+        <p>Signal-fire entry price is the key reference. Compare it to the current price before entering.</p>
       </div>
       <div class="section">
-        <h2>What To Do Today</h2>
+        <h2>New Entries</h2>
         <table><thead><tr><th>Ticker</th><th>Action</th><th>Entry</th><th>Now</th><th>Exit Rule</th><th>Hold Until</th></tr></thead>
-        <tbody>{active_rows_html}</tbody></table>
+        <tbody>{new_rows_html}</tbody></table>
       </div>
       <div class="section">
-        <h2>Open Paper Trades</h2>
+        <h2>Exits</h2>
+        <table><thead><tr><th>Ticker</th><th>Status</th><th>Exit Price</th><th>P&amp;L</th><th>Date</th></tr></thead>
+        <tbody>{closed_rows_html}</tbody></table>
+      </div>
+      <div class="section">
+        <h2>Current Paper Portfolio</h2>
         <table><thead><tr><th>Ticker</th><th>Entry</th><th>Latest</th><th>Unrealized</th><th>TP / SL</th><th>Target Date</th></tr></thead>
         <tbody>{open_rows_html}</tbody></table>
         {scorecard_html}
       </div>
       <div class="section">
-        <h2>Closed Today</h2>
-        <table><thead><tr><th>Ticker</th><th>Exit</th><th>Exit Price</th><th>P&amp;L</th><th>Date</th></tr></thead>
-        <tbody>{closed_rows_html}</tbody></table>
+        <h2>Best Rerun Watchlist</h2>
+        <table><thead><tr><th>Ticker</th><th>Val Acc</th><th>Long WR</th><th>Sharpe</th><th>Strategy</th></tr></thead>
+        <tbody>{watchlist_html}</tbody></table>
       </div>
-      <div class="section"><h2>Regime Filters</h2><ul>{filters_html}</ul></div>
       <div class="section"><h2>IBKR Paper Status</h2><ul>{ib_html}</ul></div>
     </div></body></html>"""
 
@@ -656,6 +732,7 @@ else:
 # ── Check open paper trades ───────────────────────────────────────────────────
 print(f"\nCHECKING OPEN PAPER TRADES...")
 ohlc_cache = {}
+ptdf = normalize_paper_trade_log()
 closed_trades = check_open_paper_trades(ohlc_cache)
 if closed_trades:
     print(f"  {len(closed_trades)} trades closed:")
@@ -682,7 +759,7 @@ print(f"{'-'*75}")
 
 results = []
 action_lines = []
-action_rows = []
+new_entry_rows = []
 new_paper_trades = []
 skipped_regime = []
 
@@ -775,12 +852,15 @@ for ticker, params in WATCHLIST.items():
           f"{consensus:>11} {action:>10} {filter_reason:>12}")
 
     # ── Paper trade (active tickers only) ─────────────────────────────────
+    has_open_trade = ticker in open_tickers
+    closed_today = ticker in closed_today_tickers
+    if is_inverse:
+        trade_dir = "DOWN" if all_up else "UP"
+    else:
+        trade_dir = "UP" if all_up else "DOWN"
+
     if is_active and action != "SKIP" and ticker not in open_tickers and ticker not in closed_today_tickers:
         cfg = ACTIVE[ticker]
-        if is_inverse:
-            trade_dir = "DOWN" if all_up else "UP"
-        else:
-            trade_dir = "UP" if all_up else "DOWN"
         alloc = cfg["alloc"]
         t = open_paper_trade(ticker, trade_dir, entry_close,
                              raw.iloc[-1]["timestamps"], target_date,
@@ -847,7 +927,12 @@ for ticker, params in WATCHLIST.items():
             verb = "Cover/buy-back" if is_short else "Sell"
             exit_line = f"{verb} if hits ${tp_price:.2f} (TP) or ${sl_price:.2f} (SL)"
 
-        line = (f"{action} {ticker} [{params['tier']}] @ ${entry_close:.2f}  ({origin})\n"
+        display_action = "HOLD" if has_open_trade else action
+        instruction = "Manage existing long" if (has_open_trade and not is_short) else \
+                      "Manage existing short" if (has_open_trade and is_short) else \
+                      "Go long" if not is_short else "Open short"
+
+        line = (f"{display_action} {ticker} [{params['tier']}] @ ${entry_close:.2f}  ({origin})\n"
                 f"    {exit_line}\n"
                 f"    Hold until {target_date.strftime('%Y-%m-%d')} ({params['horizon']}d) | {alloc*100:.1f}% alloc")
         if portfolio_size > 0:
@@ -857,29 +942,27 @@ for ticker, params in WATCHLIST.items():
         latest_price = float(raw.iloc[-1]["close"])
         if not is_short:
             price_move_pct = (latest_price - entry_close) / entry_close * 100
-            instruction = "Go long"
         else:
             price_move_pct = (entry_close - latest_price) / entry_close * 100
-            instruction = "Open short"
-        action_rows.append({
+        if not has_open_trade and not closed_today:
+            new_entry_rows.append({
             "ticker": ticker,
             "tier": params["tier"],
             "consensus": consensus,
-            "action": action,
             "instruction": instruction,
-            "entry_price": float(entry_close),
+            "signal_entry_price": float(entry_close),
             "latest_price": latest_price,
             "price_move_pct": price_move_pct,
             "origin": origin,
             "exit_rule": exit_line,
             "target_date": target_date.strftime("%Y-%m-%d"),
             "alloc_pct": alloc,
-        })
+            })
 
     results.append({
         "date": today, "ticker": ticker, "tier": params["tier"],
         "mini": dirs["mini"], "small": dirs["small"], "base": dirs["base"],
-        "consensus": consensus, "action": action,
+        "consensus": consensus, "action": ("HOLD" if has_open_trade and action != "SKIP" else action),
         "avg_pct": round(avg_pct, 2), "horizon": params["horizon"],
         "target_date": target_date.strftime("%Y-%m-%d"),
         "entry": round(float(entry_close), 2),
@@ -917,6 +1000,8 @@ print("Active: RIVN 4% | ENVX 3% | TSLA 2.8% | BITF 3% | PATH 2% | HON 2%")
 print("Ensemble filter: only trade when all 3 models agree")
 print(f"{'='*80}")
 
+watchlist_rows = load_revalidation_watchlist()
+
 # ── Save signal history ───────────────────────────────────────────────────────
 hist_cols = list(results[0].keys())
 new_hist = pd.DataFrame(results)
@@ -940,29 +1025,17 @@ email_lines.append("=" * 50)
 email_lines.append(f"\nVIX: {vix_level:.1f} ({vix_regime})")
 
 # Active signals
-email_lines.append(f"\nACTIVE SIGNALS:")
-if action_lines:
-    for line in action_lines:
+email_lines.append(f"\nNEW ENTRIES:")
+new_action_lines = [line for line in action_lines if line.startswith("BUY ") or line.startswith("SELL/SHORT ")]
+if new_action_lines:
+    for line in new_action_lines:
         email_lines.append(f"  {line}")
 else:
-    email_lines.append("  No active signals today.")
-
-# Regime filters
-if skipped_regime:
-    email_lines.append(f"\nREGIME FILTERS:")
-    for s in skipped_regime:
-        email_lines.append(f"  {s}")
-
-# Monitor signals
-mon_lines = [r for r in results if r["tier"] in ("MON", "INV") and r["consensus"] != "MIXED"]
-if mon_lines:
-    email_lines.append(f"\nMONITOR (not trading):")
-    for r in mon_lines:
-        email_lines.append(f"  {r['ticker']}: {r['consensus']} ({r['avg_pct']:+.1f}%)")
+    email_lines.append("  No new entries today.")
 
 # Closed trades
 if closed_trades:
-    email_lines.append(f"\nCLOSED TRADES:")
+    email_lines.append(f"\nEXITS:")
     for t in closed_trades:
         email_lines.append(
             f"  {t['ticker']} {t['direction']} -> {t['exit_reason']} "
@@ -974,7 +1047,7 @@ if os.path.exists(PAPER_TRADE_LOG):
     open_tr = ptdf[ptdf["status"] == "OPEN"]
     closed_tr = ptdf[ptdf["status"] == "CLOSED"]
     open_trade_rows = load_open_trade_snapshots(open_tr, ohlc_cache)
-    email_lines.append(f"\nPAPER PORTFOLIO ({len(open_tr)} open):")
+    email_lines.append(f"\nCURRENT PAPER PORTFOLIO ({len(open_tr)} open):")
     for t in open_trade_rows:
         ep = t['entry_price']
         alloc_str = ""
@@ -1031,18 +1104,25 @@ email_lines.append(f"  - If IBKR not connected, orders must be placed manually."
 email_lines.append(f"  - If neither TP nor SL hits by target date, close position manually.")
 email_lines.append(f"Position sizing: half-Kelly / 8 concurrent")
 email_lines.append(f"RIVN 4% | ENVX 3% | TSLA 2.8% | BITF 3% | PATH 2% | HON 2%")
+if watchlist_rows:
+    email_lines.append(f"\nBEST RERUN WATCHLIST:")
+    for row in watchlist_rows:
+        email_lines.append(
+            f"  {row['ticker']}: val {row['val_acc']:.1f}% | long_wr {row['long_wr']:.1f}% | "
+            f"Sharpe {row['sharpe']:.2f} | {row['strategy']}"
+        )
 
 email_body = "\n".join(email_lines)
 email_html = build_email_html(
     today=today,
     vix_level=vix_level,
     vix_regime=vix_regime,
-    action_rows=action_rows,
-    skipped_regime=skipped_regime,
+    new_entry_rows=new_entry_rows,
     closed_trade_rows=closed_trades,
     open_trade_rows=open_trade_rows,
     scorecard=scorecard,
     ib_status_lines=ib_status_lines,
+    watchlist_rows=watchlist_rows,
 )
 n_active_signals = sum(1 for r in results if r["action"] != "SKIP" and r["ticker"] in ACTIVE)
 subject = f"StockAI {today}: {n_active_signals} active signal{'s' if n_active_signals != 1 else ''} (VIX {vix_level:.0f})"
