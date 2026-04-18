@@ -25,8 +25,10 @@ import numpy as np
 import yfinance as yf
 from datetime import timedelta, datetime
 from ib_insync import IB, Stock, MarketOrder, LimitOrder, StopOrder, Order
+from email_formatting import format_entry_with_date
 from env_paths import add_kronos_to_path, base_path
 from live_candidates import load_live_candidates
+from market_calendar import is_us_stock_market_day
 
 add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
@@ -443,7 +445,7 @@ def build_email_html(today, vix_level, vix_regime, new_entry_rows, closed_trade_
         <tr>
           <td><strong>{html.escape(row['ticker'])}</strong><br><span class="muted">{html.escape(row['tier'])} | {html.escape(row['consensus'])}</span></td>
           <td>{action_badge("NEW")}<div class="muted">{html.escape(row['instruction'])}</div></td>
-          <td>{fmt_money(row['signal_entry_price'])}<br><span class="muted">{html.escape(row['origin'])}</span></td>
+          <td>{format_entry_with_date(row['signal_entry_price'], row.get('entry_date'))}<br><span class="muted">{html.escape(row['origin'])}</span></td>
           <td>{latest}</td>
           <td>{html.escape(row['exit_rule'])}</td>
           <td>{fmt_date(row['target_date'])}<br><span class="muted">{row['alloc_pct']*100:.1f}% alloc</span></td>
@@ -466,7 +468,7 @@ def build_email_html(today, vix_level, vix_regime, new_entry_rows, closed_trade_
         open_rows_html += f"""
         <tr>
           <td><strong>{html.escape(row['ticker'])}</strong><br><span class="muted">{html.escape(row['direction'])}</span></td>
-          <td>{fmt_money(row['entry_price'])}</td>
+          <td>{format_entry_with_date(row['entry_price'], row.get('entry_date'))}</td>
           <td>{latest}</td>
           <td>{pnl}</td>
           <td>{html.escape(exit_rule)}</td>
@@ -677,6 +679,9 @@ def submit_ibkr_order(ib, ticker, direction, entry_price, shares, tp, sl, traili
 # ── Main ──────────────────────────────────────────────────────────────────────
 today = datetime.now().strftime("%Y-%m-%d")
 portfolio_size = float(os.environ.get("PORTFOLIO_SIZE", 0))
+
+if not is_us_stock_market_day(datetime.now().date()):
+    sys.exit(0)
 
 print(f"\nLOADING MODELS...")
 predictors = {}
@@ -968,6 +973,7 @@ for ticker, params in WATCHLIST.items():
             "price_move_pct": price_move_pct,
             "origin": origin,
             "exit_rule": exit_line,
+            "entry_date": today,
             "target_date": target_date.strftime("%Y-%m-%d"),
             "alloc_pct": alloc,
             })
