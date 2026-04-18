@@ -1,0 +1,10 @@
+ticker,horizon,temp,lookback,tier,oos_acc,alloc,tp,sl,trailing_pct,skip_low_vix,skip_near_earnings,allow_short,source,notes
+RIVN,40,1.0,200,A,70.8,0.04,0.15,0.02,0.03,False,False,False,ext_checkpoint_honest_walk_forward,strong multi-window ext result
+BITF,60,1.0,200,A,83.0,0.03,0.25,0.02,0.03,True,False,False,screener_recheck,kept because deeper recheck remained strong and live config already existed
+PATH,60,1.0,200,A,72.9,0.02,0.20,0.10,0.00,False,False,False,ensemble_honest_walk_forward,strong 11-window ensemble result
+HON,60,1.0,200,A,66.1,0.02,0.15,0.10,0.00,False,False,False,ensemble_honest_walk_forward,kept as stable ensemble name with existing live config
+ITW,60,1.0,200,A,69.5,0.02,0.20,0.10,0.00,False,False,False,ensemble_promotion_test,promoted after honest fixed-exit validation
+NCLH,60,1.0,200,A,66.5,0.02,0.25,0.10,0.00,False,False,False,ensemble_promotion_test,promoted after honest fixed-exit validation
+NVAX,60,1.0,200,A,81.0,0.02,0.30,0.10,0.00,False,False,False,screener_promotion_queue,promoted after honest screener promotion pass with fixed exits
+WK,60,1.0,200,A,73.5,0.02,0.25,0.10,0.00,False,False,False,screener_promotion_queue,promoted after honest screener promotion pass with conservative fixed exits
+AAL,60,1.0,200,A,72.5,0.02,0.30,0.10,0.00,False,False,False,screener_promotion_queue,promoted after honest screener promotion pass with fixed exits

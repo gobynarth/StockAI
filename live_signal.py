@@ -26,43 +26,23 @@ import yfinance as yf
 from datetime import timedelta, datetime
 from ib_insync import IB, Stock, MarketOrder, LimitOrder, StopOrder, Order
 from env_paths import add_kronos_to_path, base_path
+from live_candidates import load_live_candidates
 
 add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
-
-# ── Active tickers (paper trade + position sized) ──────────────────────────
-ACTIVE = {
-    "RIVN": {"horizon": 40, "temp": 1.0, "lookback": 200, "tier": "A", "oos_acc": 75.0,
-             "alloc": 0.04, "tp": 0.15, "sl": 0.02,
-             "trailing_pct": 0.03},  # TRAIL_3: Sharpe 0.47 vs 0.30 fixed
-    "ENVX": {"horizon": 90, "temp": 1.0, "lookback": 200, "tier": "A", "oos_acc": 69.5,
-             "alloc": 0.03, "tp": 0.15, "sl": 0.02,
-             "trailing_pct": 0.03,  # TRAIL_3: Sharpe 0.47 vs 0.06 fixed
-             "skip_low_vix": True, "skip_near_earnings": True},
-    "TSLA": {"horizon": 90, "temp": 0.5, "lookback": 400, "tier": "B", "oos_acc": 57.2,
-             "alloc": 0.028, "tp": 0.20, "sl": 0.02},
-             # TSLA: FIXED wins (Sharpe 0.29 vs 0.13 trailing). Keep fixed TP/SL.
-    "BITF": {"horizon": 60, "temp": 1.0, "lookback": 200, "tier": "A", "oos_acc": 83.0,
-             "alloc": 0.03, "tp": 0.25, "sl": 0.02,
-             "trailing_pct": 0.03,  # TRAIL_3 wins (screener survivor, Sharpe 0.73)
-             "skip_low_vix": True},  # low VIX long_wr drops 21.7% vs 45.6%
-    "PATH": {"horizon": 60, "temp": 1.0, "lookback": 200, "tier": "A", "oos_acc": 88.5,
-             "alloc": 0.02, "tp": 0.20, "sl": 0.10},
-             # Ensemble agree 88.5%. FIXED wins (Sharpe 1.25). No filters needed.
-    "HON":  {"horizon": 60, "temp": 1.0, "lookback": 200, "tier": "A", "oos_acc": 74.0,
-             "alloc": 0.02, "tp": 0.15, "sl": 0.10},
-             # Ensemble agree 74.0%. FIXED wins (Sharpe 2.24, WR 81.1%). No filters needed.
-}
-
-# No monitors — active only
-MONITOR = {}
-WATCHLIST = ACTIVE
-EXIT_RULES = {}
 
 CRYPTO = {"BTC", "SOL", "TAO", "ETH", "DOGE", "XRP"}
 BASE = base_path()
 PAPER_TRADE_LOG = os.path.join(BASE, "paper_trades.csv")
 SIGNAL_HISTORY = os.path.join(BASE, "signal_history.csv")
+
+# ── Approved live tickers (loaded from file-backed shortlist) ──────────────
+ACTIVE = load_live_candidates(BASE)
+
+# No monitors — active only
+MONITOR = {}
+WATCHLIST = ACTIVE
+EXIT_RULES = {}
 
 MODELS = [
     {"name": "mini",  "model_id": "NeoQuasar/Kronos-mini",  "tok_id": "NeoQuasar/Kronos-Tokenizer-2k",   "max_ctx": 2048},
@@ -90,8 +70,8 @@ def fmt_date(value):
 
 
 def load_revalidation_watchlist(limit=10):
-    """Load the best rerun survivors for reference in the daily email."""
-    path = os.path.join(BASE, "screener_survivors.csv")
+    """Load the current pending promotion queue for reference in the daily email."""
+    path = os.path.join(BASE, "approved_pending_candidates.csv")
     if not os.path.exists(path):
         return []
     try:
@@ -100,21 +80,21 @@ def load_revalidation_watchlist(limit=10):
         return []
     if df.empty:
         return []
-    df = df[df["verdict"] == "KEEP"].copy()
+    if "status" in df.columns:
+        df = df[df["status"] == "pending"].copy()
     if df.empty:
         return []
-    # Filter out absurd Sharpe values from tiny/no-loss samples.
-    df["sharpe"] = pd.to_numeric(df["sharpe"], errors="coerce")
-    df = df[df["sharpe"].notna() & (df["sharpe"] < 100)]
-    df = df.sort_values(["sharpe", "val_acc", "long_wr"], ascending=[False, False, False])
+    df["mean_test_score"] = pd.to_numeric(df.get("mean_test_score"), errors="coerce")
+    df["n_windows"] = pd.to_numeric(df.get("n_windows"), errors="coerce")
+    df = df.sort_values(["mean_test_score", "n_windows", "ticker"], ascending=[False, False, True])
     rows = []
     for _, row in df.head(limit).iterrows():
         rows.append({
             "ticker": row["ticker"],
-            "val_acc": float(row["val_acc"]),
-            "long_wr": float(row["long_wr"]),
-            "sharpe": float(row["sharpe"]),
-            "strategy": str(row["best_strategy"]),
+            "val_acc": float(row["mean_test_score"]) * 100 if pd.notna(row["mean_test_score"]) else float("nan"),
+            "long_wr": float(row["n_windows"]) if pd.notna(row["n_windows"]) else float("nan"),
+            "sharpe": float("nan"),
+            "strategy": str(row.get("source", "pending")),
         })
     return rows
 
@@ -996,7 +976,11 @@ if os.path.exists(PAPER_TRADE_LOG):
         print(f"  Closed trades: {len(closed_trades_all)} | Win rate: {win_rate:.0f}% | Total P&L: {total_pnl:+.1f}%")
 
 print(f"\n{'='*80}")
-print("Active: RIVN 4% | ENVX 3% | TSLA 2.8% | BITF 3% | PATH 2% | HON 2%")
+active_summary = " | ".join(
+    f"{ticker} {cfg['alloc']*100:.1f}%"
+    for ticker, cfg in ACTIVE.items()
+)
+print(f"Active: {active_summary}")
 print("Ensemble filter: only trade when all 3 models agree")
 print(f"{'='*80}")
 

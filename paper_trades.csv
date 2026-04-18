@@ -1,0 +1,5 @@
+ticker,direction,entry_price,entry_date,target_date,trailing_pct,horizon,tp_pct,sl_pct,alloc_pct,status,exit_reason,exit_price,exit_date,pnl_pct
+ENVX,UP,5.89,2026-04-13,2026-08-17,0.03,90,0.15,0.02,0.03,CLOSED,TRAIL,6.19,2026-04-14,5.15
+PATH,UP,10.41,2026-04-17,2026-07-10,0.0,60,0.2,0.1,0.02,OPEN,,,,
+NCLH,UP,20.99,2026-04-17,2026-07-10,0.0,60,0.25,0.1,0.02,OPEN,,,,
+WK,UP,57.34,2026-04-17,2026-07-10,0.0,60,0.25,0.1,0.02,OPEN,,,,

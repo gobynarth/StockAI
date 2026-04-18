@@ -1,0 +1,24 @@
+ticker,source,n_windows,mean_test_score,status,notes
+PATH,ensemble_honest_walk_forward,11,0.728788,live,already in live set with validated config
+RIVN,ext_honest_walk_forward,16,0.707813,live,already in live set with validated config
+ITW,ensemble_promotion_test,3,0.695455,live,promoted with fixed exits after honest promotion test
+NCLH,ensemble_promotion_test,6,0.665152,live,promoted with fixed exits after honest promotion test
+HON,ensemble_honest_walk_forward,11,0.660606,live,already in live set with validated config
+HD,ensemble_honest_walk_forward,11,0.624242,pending,needs explicit live TP/SL and allocation config before activation
+ANF,screener_deeper_recheck,5,0.880000,pending,needs richer checkpoint rerun and live config
+ISRG,screener_deeper_recheck,5,0.870000,pending,needs richer checkpoint rerun and live config
+BITF,screener_deeper_recheck,5,0.830000,live,kept because live config already existed and deeper recheck held up
+OXY,screener_deeper_recheck,5,0.770000,pending,needs richer checkpoint rerun and live config
+INDI,screener_deeper_recheck,5,0.750000,pending,needs richer checkpoint rerun and live config
+GREE,screener_deeper_recheck,5,0.750000,pending,needs richer checkpoint rerun and live config
+NTLA,screener_deeper_recheck,5,0.745000,pending,below current conservative live cutoff
+OSCR,screener_deeper_recheck,5,0.740000,pending,below current conservative live cutoff
+NVAX,screener_promotion_queue,7,0.141557,live,promoted to live after honest promotion pass; fixed tp=0.30 sl=0.10 alloc=0.02
+WK,screener_promotion_queue,11,0.114689,live,promoted to live after honest promotion pass; fixed tp=0.25 sl=0.10 alloc=0.02
+AAL,screener_promotion_queue,12,0.078802,live,promoted to live after honest promotion pass; fixed tp=0.30 sl=0.10 alloc=0.02
+HYLN,screener_promotion_queue,6,0.190897,pending,rank 4 pending candidate; strong but thinner evidence than top 3; start fixed tp=0.30 sl=0.10 alloc=0.02
+RRC,screener_promotion_queue,8,0.084481,pending,rank 5 pending candidate; honest promotion pass held up; start fixed tp=0.15 sl=0.10 alloc=0.02
+TXN,screener_promotion_queue,9,0.119929,pending,rank 6 pending candidate; usable but weaker than NVAX; start fixed tp=0.30 sl=0.10 alloc=0.02
+NIO,screener_promotion_queue,13,0.076490,pending,rank 7 pending candidate; mixed winners but still usable; start fixed tp=0.25 or 0.30 sl=0.10 alloc=0.02
+MGM,screener_promotion_queue,17,0.046128,pending,rank 8 pending candidate; secondary name only; start fixed tp=0.20 sl=0.10 alloc=0.02
+SBUX,screener_promotion_queue,11,0.035787,pending,rank 9 pending candidate; secondary name only; start fixed tp=0.30 sl=0.10 alloc=0.02
