@@ -136,6 +136,8 @@ def load_data(ticker, lookback):
 
 
 def get_prediction(predictor, raw, params, model_max_ctx):
+    if raw is None or raw.empty:
+        raise ValueError("empty input price frame")
     lb = min(params["lookback"], model_max_ctx)
     horizon = params["horizon"]
     x_df = raw.iloc[-lb:][["open", "high", "low", "close", "volume", "amount"]].reset_index(drop=True)
@@ -774,18 +776,49 @@ def get_signal_age(ticker, current_consensus):
 
 for ticker, params in WATCHLIST.items():
     raw = load_data(ticker, params["lookback"])
+    if raw is None or raw.empty:
+        print(f"{ticker:6}   DATA MISSING -- skipping")
+        results.append({
+            "ticker": ticker,
+            "tier": params.get("tier", ""),
+            "mini": "N/A",
+            "small": "N/A",
+            "base": "N/A",
+            "consensus": "NO DATA",
+            "action": "SKIP",
+            "filter": "DATA MISSING",
+        })
+        continue
     dirs = {}
     pcts = {}
     entry_close = None
     target_date = None
     for m in MODELS:
-        direction, pct, ec, pc, td = get_prediction(
-            predictors[m["name"]], raw, params, m["max_ctx"]
-        )
+        try:
+            direction, pct, ec, pc, td = get_prediction(
+                predictors[m["name"]], raw, params, m["max_ctx"]
+            )
+        except Exception as e:
+            print(f"{ticker:6}   prediction failed ({e}) -- skipping")
+            results.append({
+                "ticker": ticker,
+                "tier": params.get("tier", ""),
+                "mini": "N/A",
+                "small": "N/A",
+                "base": "N/A",
+                "consensus": "PRED FAIL",
+                "action": "SKIP",
+                "filter": "DATA ERROR",
+            })
+            dirs = {}
+            break
         dirs[m["name"]] = direction
         pcts[m["name"]] = pct
         entry_close = ec
         target_date = td
+
+    if not dirs:
+        continue
 
     all_up = all(d == "UP" for d in dirs.values())
     all_down = all(d == "DOWN" for d in dirs.values())

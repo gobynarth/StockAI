@@ -1,56 +1,92 @@
 # Handoff
 
 ## Goals
-- Replace the biased research flow with honest walk-forward validation.
-- Keep the live set conservative and only promote names that survive honest retesting and exit-design checks.
-- After stabilizing live, run a full honest screener rerun from scratch.
+- Keep the research flow honest with walk-forward validation.
+- Keep live conservative and only promote names that survive honest retesting and exit-design checks.
+- Let the native Windows automation prove itself before the second promotion wave.
 
 ## Current State
 - Honest research pipeline was added locally:
   - `research_pipeline.py`
   - `honest_walk_forward.py`
-  - tests for splits, selection, execution simulation, CLI, checkpoint loading, and live candidate loading.
-- Local verification passed: `10` tests passing.
-- Live candidate loading is now file-backed via:
+  - tests for splits, selection, execution simulation, CLI, checkpoint loading, and live candidate loading
+- Verified locally:
+  - `tests/test_live_candidates.py` passes
+- Live candidate loading is file-backed via:
   - `approved_live_candidates.csv`
   - `approved_pending_candidates.csv`
   - `live_candidates.py`
-- `live_signal.py` now uses the approved live-candidate file instead of the original hardcoded set.
-- Approved live set is now:
+- `live_signal.py` now:
+  - loads the active live set from `approved_live_candidates.csv`
+  - uses `approved_pending_candidates.csv` as the rerun/promotion watchlist source
+  - prints the active summary dynamically instead of the old stale hardcoded line
+- Stale local paper trades were cleared; `paper_trades.csv` now only contains the old closed `ENVX` row until new runs add open trades again.
+
+## Live Set
+- Approved live set:
   - `RIVN`
   - `BITF`
   - `PATH`
   - `HON`
   - `ITW`
   - `NCLH`
-- Promotion results already obtained:
-  - `ITW` promoted with fixed exits, conservative config `tp=0.20`, `sl=0.10`, `alloc=0.02`
-  - `NCLH` promoted with fixed exits, conservative config `tp=0.25`, `sl=0.10`, `alloc=0.02`
-- 4090 pod is active and reachable:
-  - host: `root@213.181.111.2 -p 48484`
-  - workspace: `/root/StockAI_sync/StockAI`
-- 4090 outputs present under `/root/StockAI_sync/StockAI/honest_results`:
-  - `survivors_mixed_honest_walk_forward.csv/json`
-  - `screener_survivors_honest_walk_forward.csv/json`
-  - `screener_deeper_recheck.csv/json`
-  - `itw_nclh_exit_promotion_test.json`
-  - `itw_nclh_exit_promotion_test_small_windows.json`
-- 4090 smoke run of `live_signal.py` now works with minimal Kronos runtime and installed deps.
-- Smoke run outcome:
-  - models loaded
-  - signals generated
-  - output written to `/root/StockAI_sync/StockAI/live_signals_20260417.csv`
-  - IBKR failed as expected because no gateway was running on `127.0.0.1:4002`
-  - email skipped because `GMAIL_APP_PASSWORD` was not set
+  - `NVAX`
+  - `WK`
+  - `AAL`
+- Newly promoted into live from the honest screener wave:
+  - `NVAX` with conservative fixed exits `tp=0.30`, `sl=0.10`, `alloc=0.02`
+  - `WK` with conservative fixed exits `tp=0.25`, `sl=0.10`, `alloc=0.02`
+  - `AAL` with conservative fixed exits `tp=0.30`, `sl=0.10`, `alloc=0.02`
 
-## Known Issues / Cleanup
-- `live_signal.py` still prints a stale hardcoded summary line mentioning removed names like `ENVX` and `TSLA`.
-- The paper trade log still contains an old `TSLA` open trade, which is historical state and should be cleaned or reconciled before trusting the portfolio summary.
-- The 4090 was only prepared as a smoke environment, not a true production broker host.
+## Pending Queue
+- Next promotion wave, ranked:
+  - `HYLN`
+  - `RRC`
+  - `TXN`
+  - `NIO`
+  - `MGM`
+  - `SBUX`
+
+## Research Status
+- Full honest screener rerun was completed on the temporary 4090 pod.
+- Results were copied back locally before the pod was shut down.
+- The pod is no longer needed for the current phase.
+- Honest promotion passes were run locally for the strongest new names.
+- Best names from the latest promotion wave were:
+  - `NVAX`
+  - `WK`
+  - `AAL`
+  - `HYLN`
+  - `RRC`
+  - `TXN`
+  - `NIO`
+
+## Windows Automation Status
+- Windows scheduled task `\StockAI_Daily_Signal` exists and points at `run_daily_signal.bat`.
+- Windows-side work outside this WSL session added IBKR startup logic to the native launcher path.
+- Important nuance:
+  - hot-start runs from this WSL-driven path worked when IBKR was already up
+  - cold-start verification from WSL was not authoritative because WSL-to-Windows launch behavior is different from the native Windows trigger path
+- Native Windows runs were verified by the user outside this session and should be treated as the source of truth for Monday.
+
+## Commit
+- Main refactor/live-shortlist commit:
+  - `44c92f6` `Refactor live shortlist and honest validation flow`
+
+## Cleanup Done
+- Removed obvious stale local artifacts:
+  - old logs
+  - stale screener result exports
+  - old `screener_survivors.csv`
+  - local Codex metadata/plans
+  - duplicated nested `new_ticker_checkpoints/new_ticker_checkpoints`
+- Left older research scripts and main checkpoint/data folders intact.
 
 ## Next Steps
-1. Clean the stale hardcoded summary text in `live_signal.py` so it reflects the current approved live set.
-2. Clean or reconcile `paper_trades.csv` so removed names do not appear as active holdings.
-3. Optionally run one more local/remote smoke test after the cleanup.
-4. Then start the full honest screener rerun from scratch on the 4090.
-5. After the honest screener rerun, compare newly discovered names against the current approved/pending lists and decide on the next promotion wave.
+1. Do not change the live set again before Monday.
+2. Let the native Windows scheduled run be the proof run.
+3. After Monday, if automation/broker behavior is clean, promote the second wave:
+   - `HYLN`
+   - `RRC`
+   - `TXN`
+   - `NIO`

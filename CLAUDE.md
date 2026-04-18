@@ -1,0 +1,21 @@
+## Operator Notes
+
+- Daily signal launcher is [run_daily_signal.bat](/mnt/c/Users/Dream/projects/StockAI/run_daily_signal.bat).
+- It now sets `KRONOS_PATH=C:\Users\Dream\Kronos` internally and prefers `.venv\Scripts\python.exe` when present.
+- It now also handles native Windows IBKR startup itself:
+  - checks `127.0.0.1:4002` first
+  - starts `C:\IBC\StartGateway.bat` if needed
+  - waits for the paper API port before running `live_signal.py`
+  - only attempts IBKR auto-start during weekday US/Eastern market hours
+- Windows Task Scheduler entry verified on 2026-04-17:
+  - task: `\StockAI_Daily_Signal`
+  - logon type: `S4U`
+  - last run: `2026-04-17 9:00:00 AM`
+  - last result: `0`
+- Important production detail:
+  - the scheduled task only runs `run_daily_signal.bat`
+  - the separate Windows Startup item `IBC Gateway.lnk` was not part of the scheduled flow
+  - on 2026-04-17 the task ran at `9:00 AM`, but IBC Gateway did not start until `1:05 PM`, which is why the scheduled run saw `IBKR not available`
+- Native Windows IBC launch was manually verified after the fix:
+  - launching `C:\IBC\StartGateway.bat` brought up the Gateway
+  - `127.0.0.1:4002` opened successfully
