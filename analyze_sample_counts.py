@@ -3,11 +3,12 @@ Analyze sample count results: sc=1 (baseline from sweep) vs sc=5 vs sc=10
 """
 import pandas as pd
 import os
+from env_paths import base_path
 
 TICKERS = ["RIVN", "ENVX", "TSLA", "COIN"]
 SAMPLE_COUNTS = [5, 10]
-SWEEP_DIR = "C:/Users/Dream/StockAI/sweep_checkpoints"
-SAMPLE_DIR = "C:/Users/Dream/StockAI/sample_checkpoints"
+SWEEP_DIR = base_path("sweep_checkpoints")
+SAMPLE_DIR = base_path("sample_checkpoints")
 VALIDATION_N = 400
 
 def load_oos_accuracy(path, n_oos=VALIDATION_N):

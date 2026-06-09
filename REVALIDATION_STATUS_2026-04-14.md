@@ -179,3 +179,42 @@ This overlay contains the updated Linux-safe files:
 - `/workspace/stockai_4090_overlay.zip`
 - expected pipeline log:
   - `/workspace/StockAI/revalidate_4090.out`
+
+## Daily Signal / Scheduler Status
+
+Date: 2026-04-16
+
+### What was fixed locally
+
+- Replaced newly introduced hardcoded repo paths in the analysis scripts with `env_paths.base_path(...)`.
+- Updated `accuracy_chart.py`, `horizon_backtest.py`, and `model_compare.py` to use `add_kronos_to_path()` instead of a hardcoded Kronos path.
+- Updated `run_daily_signal.bat` to:
+  - run relative to its own directory
+  - prefer `.venv\Scripts\python.exe` when present
+  - set `KRONOS_PATH=C:\Users\Dream\Kronos`
+- Tightened `validate_tier1.py` so Yahoo-dependent sections report incomplete-data warnings instead of looking fully successful when downloads fail.
+
+### What was verified
+
+- `analyze_ext_horizons.py`, `analyze_sample_counts.py`, `rolling_accuracy.py`, and `exit_optimizer.py` now run correctly from the current repo location.
+- `live_signal.py` was triggered successfully on Windows after the launcher fix.
+- Successful daily run observed on 2026-04-16:
+  - wrote `live_signals_20260416.csv`
+  - sent email
+  - connected to IBKR and disconnected cleanly
+
+### Windows Scheduler state
+
+Verified via `schtasks /query /tn \StockAI_Daily_Signal /fo LIST /v`:
+
+- Task name: `\StockAI_Daily_Signal`
+- Status: `Ready`
+- Scheduled Task State: `Enabled`
+- Next Run Time: `2026-04-17 9:00:00 AM`
+- Last Run Time: `2026-04-16 9:00:01 AM`
+- Last Result: `-1073741510`
+
+Important note:
+
+- That nonzero last result corresponds to the pre-fix broken state.
+- A later manual post-fix run completed successfully, so the task should now be in good shape for the next scheduled run.

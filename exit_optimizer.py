@@ -10,6 +10,7 @@ import sys, os
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from env_paths import base_path
 
 TICKERS = sys.argv[1:] if len(sys.argv) > 1 else ["RIVN", "ENVX", "TSLA", "COIN"]
 
@@ -21,7 +22,7 @@ BEST_CONFIGS = {
 }
 
 VALIDATION_N = 400
-BASE = "C:/Users/Dream/StockAI"
+BASE = base_path()
 TAKE_PROFITS = [0.02, 0.05, 0.10, 0.15, 0.20]
 STOP_LOSSES  = [0.02, 0.05, 0.10]
 

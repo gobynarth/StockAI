@@ -15,9 +15,10 @@ Order:
 Run: python overnight_run.py
 """
 import subprocess, sys, os
+from env_paths import base_path
 
 PYTHON = sys.executable
-BASE   = "C:/Users/Dream/StockAI"
+BASE   = base_path()
 
 def run(script, *args):
     cmd = [PYTHON, "-u", os.path.join(BASE, script)] + list(args)

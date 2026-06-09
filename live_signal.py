@@ -26,6 +26,7 @@ import yfinance as yf
 from datetime import timedelta, datetime
 from ib_insync import IB, Stock, MarketOrder, LimitOrder, StopOrder, Order
 from email_formatting import format_entry_with_date
+from ibkr_connection import connect_ibkr_session
 from env_paths import add_kronos_to_path, base_path
 from live_candidates import load_live_candidates
 from market_calendar import is_us_stock_market_day
@@ -588,17 +589,25 @@ def send_email(subject, body_text, body_html=""):
 IB_HOST = os.environ.get("IB_HOST", "127.0.0.1")
 IB_PORT = int(os.environ.get("IB_PORT", "4002"))  # IB Gateway paper default
 IB_CLIENT_ID = int(os.environ.get("IB_CLIENT_ID", "1"))
+IB_READ_ONLY_ENV = os.environ.get("IB_READ_ONLY", "").strip().lower()
+
+
+def ib_read_only_override():
+    if not IB_READ_ONLY_ENV:
+        return None
+    return IB_READ_ONLY_ENV in {"1", "true", "yes", "on"}
 
 def connect_ibkr():
     """Connect to IB Gateway. Returns IB instance or None if unavailable."""
-    ib = IB()
-    try:
-        ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENT_ID, timeout=10)
-        print(f"  IBKR connected on {IB_HOST}:{IB_PORT} (accounts: {ib.managedAccounts()})")
-        return ib
-    except Exception as e:
-        print(f"  IBKR not available ({e}) -- orders will NOT be submitted")
-        return None
+    return connect_ibkr_session(
+        ib_factory=IB,
+        host=IB_HOST,
+        port=IB_PORT,
+        client_id=IB_CLIENT_ID,
+        timeout=10,
+        force_read_only=ib_read_only_override(),
+        logger=print,
+    )
 
 
 def submit_ibkr_order(ib, ticker, direction, entry_price, shares, tp, sl, trailing_pct=0):
@@ -707,11 +716,15 @@ else:
 
 # ── Connect to IBKR ──────────────────────────────────────────────────────────
 print(f"\nIBKR CONNECTION...")
-ib = connect_ibkr()
+ib_conn = connect_ibkr()
+ib = ib_conn.ib
+ib_read_only = ib_conn.read_only
 ibkr_orders = []
 if ib:
     ib_status_lines = [f"Connected to {IB_HOST}:{IB_PORT}",
-                       f"Accounts: {', '.join(ib.managedAccounts()) or 'none reported'}"]
+                       f"Accounts: {', '.join(ib_conn.accounts) or 'none reported'}"]
+    if ib_read_only:
+        ib_status_lines.append("API is in read-only mode; no orders will be submitted.")
 else:
     ib_status_lines = [f"Not connected on {IB_HOST}:{IB_PORT}",
                        "No paper orders were submitted."]
@@ -895,7 +908,7 @@ for ticker, params in WATCHLIST.items():
         print(f"         >> TP=${tp_price:.2f} (+{tp*100:.0f}%)  SL=${sl_price:.2f} (-{sl*100:.0f}%)")
 
         # ── Submit to IBKR ───────────────────────────────────────────────
-        if ib and portfolio_size > 0:
+        if ib and not ib_read_only and portfolio_size > 0:
             shares = int(portfolio_size * alloc / entry_close)
             if shares >= 1:
                 try:
@@ -908,6 +921,8 @@ for ticker, params in WATCHLIST.items():
                 except Exception as e:
                     print(f"         >> IBKR ORDER FAILED: {e}")
                     ibkr_orders.append(f"FAILED {ticker}: {e}")
+        elif ib and ib_read_only:
+            print("         >> IBKR read-only mode, skipping order submission")
 
     elif is_active and action != "SKIP" and ticker in open_tickers:
         print(f"         >> Already in open trade, skipping")
@@ -1115,8 +1130,12 @@ if ibkr_orders:
         email_lines.append(f"  {o}")
     ib_status_lines.extend(ibkr_orders)
 elif ib:
-    email_lines.append(f"\nIBKR: Connected, no new orders today.")
-    ib_status_lines.append("Connected, no new orders submitted today.")
+    if ib_read_only:
+        email_lines.append(f"\nIBKR: Connected in read-only mode (orders not submitted).")
+        ib_status_lines.append("Connected in read-only mode; no new orders submitted.")
+    else:
+        email_lines.append(f"\nIBKR: Connected, no new orders today.")
+        ib_status_lines.append("Connected, no new orders submitted today.")
 else:
     email_lines.append(f"\nIBKR: Not connected (orders not submitted).")
 

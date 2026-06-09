@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER  = sys.argv[1] if len(sys.argv) > 1 else "UBER"
@@ -141,6 +143,6 @@ ax2.legend(fontsize=10, facecolor="#2a2a3e", labelcolor="white")
 ax2.grid(True, alpha=0.2)
 
 plt.tight_layout()
-out = f"C:/Users/Dream/StockAI/horizon_backtest_{TICKER}.png"
+out = base_path(f"horizon_backtest_{TICKER}.png")
 plt.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
 print(f"\nSaved: {out}")

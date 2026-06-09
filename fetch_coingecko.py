@@ -5,8 +5,10 @@ Usage: python fetch_coingecko.py TAO
 """
 import sys
 import time
+import os
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
+from env_paths import base_path
 
 # Map ticker -> CoinGecko coin ID
 COIN_IDS = {
@@ -62,8 +64,8 @@ df["amount"] = df["close"] * df["volume"]
 df = df[["timestamps", "open", "high", "low", "close", "volume", "amount"]].dropna()
 df = df.sort_values("timestamps").reset_index(drop=True)
 
-out = f"C:/Users/Dream/StockAI/data/{TICKER}.csv"
-import os; os.makedirs("C:/Users/Dream/StockAI/data", exist_ok=True)
+out = base_path("data", f"{TICKER}.csv")
+os.makedirs(base_path("data"), exist_ok=True)
 df.to_csv(out, index=False)
 print(f"Saved {len(df)} rows to {out}")
 print(f"Date range: {df['timestamps'].min()} to {df['timestamps'].max()}")

@@ -5,9 +5,10 @@ Run this before uploading to RunPod.
 import yfinance as yf
 import pandas as pd
 import os
+from env_paths import base_path
 
 TICKERS = ["RIVN", "ENVX", "TSLA", "COIN"]
-OUT_DIR = "C:/Users/Dream/StockAI/data"
+OUT_DIR = base_path("data")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 for ticker in TICKERS:

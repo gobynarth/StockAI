@@ -6,8 +6,10 @@ Resume run: pick up what the overnight_run missed.
 - Multi-horizon ensemble
 """
 import subprocess, sys, os
+from env_paths import base_path
+
 PYTHON = sys.executable
-BASE   = "C:/Users/Dream/StockAI"
+BASE   = base_path()
 
 def run(script, *args):
     cmd = [PYTHON, "-u", os.path.join(BASE, script)] + list(args)

@@ -4,10 +4,11 @@ Compare OOS accuracy across horizons.
 """
 import pandas as pd
 import os
+from env_paths import base_path
 
 TICKERS = ["RIVN", "ENVX", "TSLA", "COIN"]
 HORIZONS = [30, 40, 60, 90]
-DIR = "C:/Users/Dream/StockAI/ext_checkpoints"
+DIR = base_path("ext_checkpoints")
 VALIDATION_N = 400
 
 def load_oos_accuracy(path, n_oos=VALIDATION_N):

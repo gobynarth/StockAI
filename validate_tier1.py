@@ -18,6 +18,12 @@ HORIZON = 60
 VALIDATION_N = 400
 
 
+def require_unique_dates(df, ticker, model):
+    dupes = int(df["date"].duplicated().sum())
+    if dupes:
+        raise ValueError(f"{ticker} {model}: found {dupes} duplicate dates in checkpoint")
+
+
 def build_ensemble(ticker):
     """Load checkpoints, merge, return DataFrame with agree-only signals."""
     dfs = {}
@@ -25,14 +31,18 @@ def build_ensemble(ticker):
         path = f"{CKPT_DIR}/{ticker}_{model}.csv"
         df = pd.read_csv(path, parse_dates=["date"])
         df = df[df["horizon"] == HORIZON].reset_index(drop=True)
+        require_unique_dates(df, ticker, model)
         dfs[model] = df
 
-    merged = dfs["mini"][["date", "entry_close", "actual_close", "correct"]].copy()
-    merged = merged.rename(columns={"correct": "correct_mini"})
-    merged["pred_mini"] = dfs["mini"]["pred_close"]
+    merged = dfs["mini"][["date", "entry_close", "actual_close", "correct", "pred_close"]].copy()
+    merged = merged.rename(columns={"correct": "correct_mini", "pred_close": "pred_mini"})
     for model in ["small", "base"]:
-        merged[f"pred_{model}"] = dfs[model]["pred_close"]
-        merged[f"correct_{model}"] = dfs[model]["correct"]
+        right = dfs[model][["date", "pred_close", "correct"]].rename(
+            columns={"pred_close": f"pred_{model}", "correct": f"correct_{model}"}
+        )
+        merged = merged.merge(right, on="date", how="inner")
+    if merged.empty:
+        raise ValueError(f"{ticker}: no overlapping dates across ensemble checkpoints")
 
     for model in MODELS:
         merged[f"dir_{model}"] = merged[f"pred_{model}"] > merged["entry_close"]
@@ -110,19 +120,24 @@ print("[1] CORRELATION CHECK")
 print("=" * 60)
 symbols = TICKERS + EXISTING
 closes = {}
+correlation_ok = True
 for t in symbols:
     try:
         df = yf.download(t, period="3y", interval="1d", auto_adjust=True, progress=False)
         if df.empty:
+            correlation_ok = False
             continue
         df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
         closes[t] = df["close"]
     except Exception as e:
+        correlation_ok = False
         print(f"  {t}: failed ({e})")
 
 prices = pd.DataFrame(closes).dropna()
 returns = prices.pct_change().dropna()
 corr = returns.corr()
+if not closes:
+    print("  Correlation check incomplete: no Yahoo price data was available.")
 
 print("\nCorrelation matrix (new vs existing):")
 for t in TICKERS:
@@ -181,14 +196,20 @@ SL_grid = [0.02, 0.05, 0.10]
 
 exit_opt = {}
 raw_cache = {}
+price_download_ok = True
 for t in TICKERS:
     merged = build_ensemble(t)
     try:
         raw = yf.download(t, period="5y", interval="1d", auto_adjust=True, progress=False)
+        if raw.empty:
+            price_download_ok = False
+            print(f"  {t}: failed to download price data")
+            continue
         raw.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in raw.columns]
         raw.index = pd.to_datetime(raw.index).tz_localize(None) if raw.index.tz else pd.to_datetime(raw.index)
         raw_cache[t] = raw
-    except:
+    except Exception:
+        price_download_ok = False
         print(f"  {t}: failed to download price data")
         continue
 
@@ -235,13 +256,20 @@ print(f"\n{'=' * 60}")
 print("[5] VIX REGIME FILTER")
 print("=" * 60)
 
+vix_ok = True
 vix_df = yf.download("^VIX", period="5y", interval="1d", auto_adjust=True, progress=False)
-vix_df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in vix_df.columns]
-vix_df.index = pd.to_datetime(vix_df.index).tz_localize(None) if vix_df.index.tz else pd.to_datetime(vix_df.index)
-vix = vix_df[["close"]].rename(columns={"close": "vix"})
+if vix_df.empty:
+    vix_ok = False
+    vix = pd.DataFrame(columns=["vix"])
+else:
+    vix_df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in vix_df.columns]
+    vix_df.index = pd.to_datetime(vix_df.index).tz_localize(None) if vix_df.index.tz else pd.to_datetime(vix_df.index)
+    vix = vix_df[["close"]].rename(columns={"close": "vix"})
 
 needs_vix = {}
-for t in best_strategy:
+if not vix_ok:
+    print("  VIX filter skipped: no VIX data was available from Yahoo.")
+for t in best_strategy if vix_ok else []:
     merged = build_ensemble(t)
     agree = merged[merged["all_agree"]].copy()
     longs = agree[agree["pred_up"]].copy()
@@ -326,3 +354,12 @@ for t in TICKERS:
         print(f"{t:<8} {agree_acc:>9.1f}% {wf_str:>10} {bs['strategy']:>12} {eo['tp']*100:>4.0f}% {eo['sl']*100:>4.0f}% {bs['sharpe']:>7.2f} {bs['wr']:>5.1f}% {'skip<15' if needs_vix.get(t) else 'none':>8} {'skip' if needs_earnings.get(t) else 'none':>8}")
     else:
         print(f"{t:<8} {agree_acc:>9.1f}% {wf_str:>10} {'N/A':>12}")
+
+if not correlation_ok or not price_download_ok or not vix_ok:
+    print("\nWARNING: Yahoo-dependent stages were incomplete.")
+    if not correlation_ok:
+        print("  - Correlation check used partial or no Yahoo price data.")
+    if not price_download_ok:
+        print("  - Exit optimizer / trailing stop sections skipped one or more tickers due to missing Yahoo price data.")
+    if not vix_ok:
+        print("  - VIX regime filter was skipped due to missing Yahoo VIX data.")

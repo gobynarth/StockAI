@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER = sys.argv[1] if len(sys.argv) > 1 else "NVDA"
@@ -185,7 +187,7 @@ summary = "  |  ".join([
 fig.text(0.5, 0.01, summary, ha="center", fontsize=10, fontweight="bold", color="white")
 
 plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-out = f"C:/Users/Dream/StockAI/model_compare_{TICKER}.png"
+out = base_path(f"model_compare_{TICKER}.png")
 plt.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
 print(f"\nSaved: {out}")
 print(f"\n{summary}")

@@ -10,9 +10,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from env_paths import base_path
 
-SWEEP_DIR    = "C:/Users/Dream/StockAI/sweep_checkpoints"
-CHECKPOINTS  = "C:/Users/Dream/StockAI/checkpoints"
+SWEEP_DIR    = base_path("sweep_checkpoints")
+CHECKPOINTS  = base_path("checkpoints")
 EDGE_TICKERS = ["ENVX", "RIVN", "TSLA", "COIN"]
 VALIDATION_N = 400
 SELECTION_N  = 600
@@ -112,6 +113,6 @@ for idx, ticker in enumerate(EDGE_TICKERS):
     ax.legend(fontsize=7, facecolor="#2a2a3e", labelcolor="white")
     ax.grid(True, alpha=0.15)
 
-out = "C:/Users/Dream/StockAI/rolling_accuracy.png"
+out = base_path("rolling_accuracy.png")
 plt.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
 print(f"\nSaved: {out}")

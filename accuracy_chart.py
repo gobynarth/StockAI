@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import yfinance as yf
 from datetime import timedelta
-sys.path.append("C:/Users/Dream/Kronos")
+from env_paths import add_kronos_to_path, base_path
+
+add_kronos_to_path()
 from model import Kronos, KronosTokenizer, KronosPredictor
 
 TICKER = sys.argv[1] if len(sys.argv) > 1 else "AAPL"
@@ -117,6 +119,6 @@ fig.text(0.5, 0.01, f"Mean Absolute Error — 1-day: {mae1:.2f}%  |  10-day: {ma
          ha="center", fontsize=11, fontweight="bold")
 
 plt.tight_layout(rect=[0, 0.03, 1, 1])
-plt.savefig("C:/Users/Dream/StockAI/accuracy_chart.png", dpi=150, bbox_inches="tight")
+plt.savefig(base_path("accuracy_chart.png"), dpi=150, bbox_inches="tight")
 print(f"\nChart saved to accuracy_chart.png")
 print(f"\nMean Absolute Error — 1-day: {mae1:.2f}%  |  10-day: {mae10:.2f}%")

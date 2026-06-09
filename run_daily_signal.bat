@@ -38,7 +38,7 @@ if "%IB_READY%"=="1" (
 ) else (
   echo [%date% %time%] IBKR not listening on %IB_HOST%:%IB_PORT%; attempting startup via "%IBC_STARTER%">> "%SCRIPT_DIR%signal_log.txt"
   if exist "%IBC_STARTER%" (
-    call "%IBC_STARTER%" /INLINE /NOICON
+    start "" /b cmd /c ""%IBC_STARTER%" /INLINE /NOICON"
   ) else (
     echo [%date% %time%] WARNING: IBKR starter not found at "%IBC_STARTER%">> "%SCRIPT_DIR%signal_log.txt"
   )
